@@ -2,7 +2,7 @@ import uuid from 'uuid';
 /**
  * 基于 d3 的添加渐变色的方法
  * @author xuwanwan
- * @param {*} svg d3 dom
+ * @param {*} svg d3 dom 对象
  * @param { array } color 颜色配置 [{ color: 'red', rate: 0 },{ color: 'blue', rate: 100 }]
  */
 
