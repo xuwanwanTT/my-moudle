@@ -1,4 +1,5 @@
 import * as d3 from 'd3';
+import { colorY } from '../common/color';
 
 export default class Map {
   constructor(option) {
@@ -51,6 +52,7 @@ export default class Map {
     this.timer = setTimeout(() => {
       this.lock = false;
       this.drawMap();
+      this.drawText();
     }, 100);
 
   }
@@ -61,40 +63,85 @@ export default class Map {
     const json = me._json;
     const data = me._data;
     const svg = me.svg;
-    let offsetY = 0;
+    svg.append('g');
+    let offsetY = 20;
+    const mapAroundGColor = colorY(svg, [{ color: 'rgba(14,135,255,1)', rate: 0 }, { color: 'rgba(53,205,255,1)', rate: 100 }]);
 
-    let projection = d3.geoMercator()
-      .fitExtent([[0, 20], [option.width, option.height]], json);
+    const projection = d3.geoMercator()
+      .fitExtent([[0, 0], [option.width - 20, option.height - 20]], json);
 
-    d3.geoPath()
-      .projection(projection);
-    let g = svg.selectAll('g').data(json.features).enter();
+    // 围边 map
+    const mapAroundG = svg.append('g');
+    json.features.forEach(arr => {
+      if (arr.geometry.type === 'Polygon') {
+        const site = arr.geometry.coordinates[0];
+        const len = site.length;
+        site.forEach((s, i) => {
+          if (i == len - 1) { return false; }
+          const temp1 = projection(s);
+          const temp2 = projection(site[i + 1]);
+          mapAroundG.append('g')
+            .append('path')
+            .attr('d', [
+              `M${temp1[0]} ${temp1[1]} `,
+              `L${temp2[0]} ${temp2[1]} `,
+              `L${temp2[0]} ${temp2[1] + offsetY} `,
+              `L${temp1[0]} ${temp1[1] + offsetY} `,
+              `L${temp1[0]} ${temp1[1]} Z `
+            ].join(''))
+            .attr('fill', `url(#${mapAroundGColor})`);
+        });
+      } else if (arr.geometry.type === 'MultiPolygon') {
+        let tempArr = arr.geometry.coordinates;
+        tempArr.forEach(site => {
+          const len = site.length;
+          site.forEach((s, i) => {
+            if (i == len - 1) { return false; }
+            const temp1 = projection(s);
+            const temp2 = projection(site[i + 1]);
+            mapAroundG.append('g')
+              .append('path')
+              .attr('d', [
+                `M${temp1[0]} ${temp1[1]} `,
+                `L${temp2[0]} ${temp2[1]} `,
+                `L${temp2[0]} ${temp2[1] + offsetY} `,
+                `L${temp1[0]} ${temp1[1] + offsetY} `,
+                `L${temp1[0]} ${temp1[1]} Z `
+              ].join(''))
+              .attr('fill', `url(#${mapAroundGColor})`);
+          });
+        });
+      }
+    });
 
+    // 顶层 map
+    const mapTopG = svg.append('g').selectAll('g').data(json.features).enter();
     // path
-    let map = g.append('g').append('path')
+    let mapTop = mapTopG.append('g').append('path')
       .style('cursor', 'pointer')
       .attr('class', function (d) {
         return 'map' + d.id;
       })
       .attr('stroke', '#fff')
       .attr('stroke-width', 1)
-      // .attr('fill', function (d, i) {
-      //   let str = JSON.stringify(provinceName);
-      //   if (str.indexOf(d.properties.name) != -1) {
-      //     let index = 3;
-      //     let value = me.valueScale(Number(d.properties.value));
-      //     if (value > 66) {
-      //       index = 0;
-      //     } else if (value > 33) {
-      //       index = 1;
-      //     } else if (value > 2) {
-      //       index = 2;
-      //     }
-      //     return color[index];
-      //   } else {
-      //     return color[3];
-      //   }
-      // })
+      .attr('fill', function (d, i) {
+        return 'rgba(53, 205, 255, .8)';
+        let str = JSON.stringify(provinceName);
+        if (str.indexOf(d.properties.name) != -1) {
+          let index = 3;
+          let value = me.valueScale(Number(d.properties.value));
+          if (value > 66) {
+            index = 0;
+          } else if (value > 33) {
+            index = 1;
+          } else if (value > 2) {
+            index = 2;
+          }
+          return color[index];
+        } else {
+          return color[3];
+        }
+      })
       .attr('d', function (d, i) {
         if (option.up) {
           let temp = {};
@@ -102,32 +149,69 @@ export default class Map {
           temp.name = d.properties.name;
           me.cpData.push(temp);
         }
-        let site = d.geometry.coordinates[0];
         let path = '';
-        if (d.geometry.type == 'MultiPolygon') {
-          site = d.geometry.coordinates;
+        if (d.geometry.type === 'Polygon') {
+          let site = d.geometry.coordinates[0];
           for (let i = 0; i < site.length; i++) {
-            for (let k = 0; k < site[i][0].length; k++) {
-              let dot = projection(site[i][0][k]);
-              if (k === 0) {
-                path += 'M' + dot[0] + ',' + (dot[1] + offsetY) + ' ';
-              } else {
-                path += 'L' + dot[0] + ',' + (dot[1] + offsetY) + ' ';
-              }
-            }
-          }
-        } else {
-          for (let i = 0; i < site.length; i++) {
-            let dot = projection(site[i]);
-            if (i === 0) {
-              path += 'M' + dot[0] + ',' + (dot[1] + offsetY) + ' ';
+            const temp = projection(site[i]);
+            if (i == 0) {
+              path += `M${temp[0]},${temp[1]} `;
             } else {
-              path += 'L' + dot[0] + ',' + (dot[1] + offsetY) + ' ';
+              path += `L${temp[0]},${temp[1]} `;
             }
           }
+        } else if (d.geometry.type === 'MultiPolygon') {
+          let site = d.geometry.coordinates;
+          site.forEach(arr => {
+            arr[0].forEach((s, i) => {
+              const temp = projection(s);
+              if (i == 0) {
+                path += `M${temp[0]},${temp[1]} `;
+              } else {
+                path += `L${temp[0]},${temp[1]} `;
+              }
+            });
+          });
         }
         return path;
       });
+
+    // 事件
+    mapTop
+      .on('click', function (d, i) {
+        console.log(d);
+      })
+      .on('mouseover', function (d, i) {
+        console.log(d);
+        d3.select(this).attr('fill', 'rgba(26, 160, 255, .9)');
+      })
+      .on('mouseout', function (d, i) {
+        console.log(d);
+        d3.select(this).attr('fill', 'rgba(53, 205, 255, .8)');
+      });
+
+    me.projection = projection;
+  }
+
+  drawText() {
+    const me = this;
+    const svg = me.svg.append('g');
+    const json = me._json;
+    const projection = me.projection;
+
+    const text = svg.selectAll('text').data(json.features).enter().append('text');
+    text.text(function (d) {
+      return d.properties.name;
+    })
+      .style('font-size', 14)
+      .style('text-anchor', 'middle')
+      .style('pointer-events', 'none')
+      .attr('x', function (d) {
+        return projection(d.properties.cp)[0];
+      })
+      .attr('y', function (d) {
+        return projection(d.properties.cp)[1];
+      })
   }
 
 }
