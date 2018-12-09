@@ -19,6 +19,7 @@
 !.gitlab-ci.yml
 !.eslintrc.js
 !.eslintrc.json
+!.babelrc
 .DS_Store
 Thumbs.db
 *.rar
